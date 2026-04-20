@@ -1,0 +1,35 @@
+{
+  "name": "foodie-baby",
+  "version": "1.0.0",
+  "description": "Foodie Baby - 宝宝辅食喂养助手",
+  "main": "main.ts",
+  "scripts": {
+    "dev:mp-weixin": "uni -p mp-weixin",
+    "build:mp-weixin": "uni build -p mp-weixin && node -e \"const fs=require('fs'); const p='dist/build/mp-weixin/project.config.json'; const d=JSON.parse(fs.readFileSync(p)); d.cloudfunctionRoot='cloudfunctions/'; fs.writeFileSync(p,JSON.stringify(d,null,2)); console.log('cloudfunctionRoot patched')\" && cp -r cloudfunctions dist/build/mp-weixin/",
+    "dev:h5": "uni -p h5",
+    "build:h5": "uni build -p h5"
+  },
+  "dependencies": {
+    "@dcloudio/uni-app": "^3.0.0-alpha-4020420241231001",
+    "@dcloudio/uni-components": "^3.0.0-alpha-4020420241231001",
+    "@dcloudio/uni-h5": "^3.0.0-alpha-4020420241231001",
+    "@dcloudio/uni-mp-weixin": "^3.0.0-alpha-4020420241231001",
+    "@dcloudio/uni-ui": "^1.5.12",
+    "@tanzhenxing/zx-icon": "^1.0.15",
+    "colorui-for-uniapp": "^1.0.31",
+    "pinia": "^2.1.7",
+    "vue": "^3.4.21"
+  },
+  "devDependencies": {
+    "@dcloudio/types": "^3.4.8",
+    "@dcloudio/uni-cli-shared": "^3.0.0-alpha-4020420241231001",
+    "@dcloudio/uni-stacktracey": "^3.0.0-alpha-4020420241231001",
+    "@dcloudio/vite-plugin-uni": "^3.0.0-alpha-4020420241231001",
+    "sass": "^1.99.0",
+    "typescript": "^5.4.2",
+    "vite": "^5.1.6"
+  },
+  "uni-app": {
+    "scripts": {}
+  }
+}

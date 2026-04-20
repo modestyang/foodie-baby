@@ -1,0 +1,39 @@
+// ============================================
+// Warm Parenting Theme - Global Style Variables
+// ============================================
+
+// --- Primary Brand ---
+$primary-gradient-start: #FF9882;   // Coral start
+$primary-gradient-end: #FF6B6B;     // Coral end
+$primary: #FF6B6B;                 // Solid primary (fallback)
+$primary-light: #FFE4D4;           // Light tint
+
+// --- Background ---
+$background: #FAF9F5;              // Warm off-white
+$card-bg: #FFFFFF;                 // Card surface
+$card-radius: 24rpx;              // Card border radius
+$shadow-light: rgba(0, 0, 0, 0.03); // Ultra-light shadow
+
+// --- Text ---
+$text-primary: #333333;           // Primary text
+$text-secondary: #666666;          // Secondary text
+$text-hint: #999999;               // Placeholder/hint text
+
+// --- Meal Type Colors ---
+// breakfast amber
+$meal-breakfast: #FFB74D;          // Amber
+// lunch orange
+$meal-lunch: #FF9800;              // Orange
+// snack rose
+$meal-snack: #F48FB1;              // Rose
+// dinner indigo
+$meal-dinner: #7986CB;             // Indigo
+
+// --- Status Colors ---
+$status-pending: #FF9800;           // Pending - Orange
+$status-adopted: #4CAF50;          // Adopted - Green
+$status-rejected: #999999;          // Rejected - Gray
+
+// --- Scrollbar (Web/Desktop) ---
+$scrollbar-thumb: rgba(0, 0, 0, 0.15);
+$scrollbar-track: rgba(0, 0, 0, 0.05);

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la /Users/modest/IdeaProjects/foodie-baby/pages/*/)",
+      "Bash(mkdir -p *)",
+      "Bash(cp -r *)",
+      "Bash(rm -rf *)",
+      "Bash(cat *)",
+      "Bash(echo *)",
+      "Bash(cd *)"
+    ],
+    "defaultMode": "acceptEdits"
+  }
+}
