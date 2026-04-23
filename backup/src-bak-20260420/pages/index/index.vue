@@ -110,7 +110,7 @@ const callLLMAPI = async (prompt: string) => {
         'Authorization': `Bearer ${token}`
       },
       data: {
-        model: 'qwen3.5-35b-a3b',
+        model: 'glm-5.1',
         messages: [
           {
             role: 'system',

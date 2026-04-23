@@ -95,3 +95,23 @@ Custom skills are documented in `docs/.claude/skills/`:
 - **Trial generation**: Month age input not stored, only used for single generation
 - **One-click generation**: Shows full day (breakfast + lunch + afternoon snack + dinner)
 - **History awareness**: Pass 7-day summary to AI for smart recommendations
+## Build & Deploy
+
+每次修改代码后必须执行：
+
+```bash
+npm run build:mp-weixin
+```
+
+**输出目录**：`dist/build/mp-weixin/`
+
+**重要**：UniApp CLI 编译时**不会自动复制** `cloudfunctions/` 目录到 `dist/build/mp-weixin/`。每次修改云函数源码后，必须手动将 `cloudfunctions/` 下的内容同步到 `dist/build/mp-weixin/cloudfunctions/`，否则微信开发者工具运行的还是旧代码。
+
+同步命令（修改云函数后执行）：
+```bash
+cp -r cloudfunctions/* dist/build/mp-weixin/cloudfunctions/
+```
+
+**云函数配置**：`dist/build/mp-weixin/project.config.json` 中已配置 `"cloudfunctionRoot": "cloudfunctions/"`，指向编译输出内的 `cloudfunctions/` 目录。
+
+用微信开发者工具导入 `dist/build/mp-weixin/` 即可运行调试。

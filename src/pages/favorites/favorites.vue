@@ -15,9 +15,10 @@
           class="favorite-card"
           @click="handleView(item)"
         >
+          <view class="card-decor"></view>
           <!-- 卡片顶部：餐次标签 + 红心 -->
           <view class="card-top">
-            <text class="meal-badge" :class="item.mealType">{{ getMealTypeText(item.mealType) }}</text>
+            <text class="meal-badge" :class="item.meals?.[0]?.type">{{ getMealTypeText(item.meals?.[0]?.type) }}</text>
             <view class="heart-icon" @click.stop="handleUnfavorite(item)">
               <text class="iconfont-filled">&#10084;</text>
             </view>
@@ -25,7 +26,7 @@
 
           <!-- 卡片主体：菜品名称 + 食材概要 -->
           <view class="card-body">
-            <text class="card-title">{{ item.dishName || '未命名菜品' }}</text>
+            <text class="card-title">{{ item.meals?.[0]?.name || '未命名菜品' }}</text>
             <text class="card-ingredients">{{ getIngredients(item) }}</text>
           </view>
 
@@ -49,11 +50,9 @@ import { ref, computed, onMounted } from 'vue'
 
 interface FavoriteItem {
   _id?: string
-  dishName?: string
-  mealType?: 'breakfast' | 'lunch' | 'snack' | 'dinner'
-  ingredients?: string[]
+  meals?: any[]
   created_at?: string
-  recipeData?: any
+  favorited_at?: string
 }
 
 const favoritesList = ref<FavoriteItem[]>([])
@@ -83,11 +82,13 @@ const loadFavorites = async () => {
   }
 }
 
-// 按日期分组
+// 按日期分组（使用 favorited_at 排序）
 const groupedFavorites = computed(() => {
   const groups: Record<string, FavoriteItem[]> = {}
   favoritesList.value.forEach(item => {
-    const date = item.created_at?.split('T')[0] || '未知'
+    // 优先用 favorited_at，否则用 created_at
+    const dateStr = item.favorited_at || item.created_at || ''
+    const date = dateStr.split('T')[0] || '未知'
     if (!groups[date]) {
       groups[date] = []
     }
@@ -118,21 +119,17 @@ const getMealTypeText = (type?: string) => {
 }
 
 const getIngredients = (item: FavoriteItem) => {
-  if (item.ingredients && Array.isArray(item.ingredients)) {
-    return item.ingredients.slice(0, 3).join('、')
+  const meal = item.meals?.[0]
+  if (meal?.ingredients && Array.isArray(meal.ingredients)) {
+    return meal.ingredients.slice(0, 3).join('、')
   }
   return ''
 }
 
 const handleView = (item: FavoriteItem) => {
-  if (item.recipeData) {
+  if (item.meals && item.meals.length > 0) {
     uni.navigateTo({
-      url: `/pages/recipe/recipe?data=${encodeURIComponent(JSON.stringify([item.recipeData]))}`
-    })
-  } else {
-    // 传递单个菜品信息
-    uni.navigateTo({
-      url: `/pages/recipe/recipe?dishName=${encodeURIComponent(item.dishName || '')}&mealType=${item.mealType || ''}`
+      url: `/pages/recipe/recipe?data=${encodeURIComponent(JSON.stringify(item.meals))}`
     })
   }
 }
@@ -167,29 +164,33 @@ const handleUnfavorite = (item: FavoriteItem) => {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
+@import '@/styles/variables.scss';
+
 .favorites-page {
   min-height: 100vh;
-  background-color: #FAF9F5;
-  padding: 32rpx;
+  background-color: $background;
+  padding: 0;
 }
 
 /* 页面标题 */
 .page-header {
-  margin-bottom: 32rpx;
+  padding: 48rpx 32rpx 16rpx;
 }
 
 .page-title {
-  font-size: 40rpx;
-  font-weight: 600;
-  color: #333333;
+  font-size: 36rpx;
+  font-weight: 800;
+  color: $text-primary;
+  letter-spacing: -0.5px;
 }
 
 /* 收藏列表 */
 .favorites-list {
   display: flex;
   flex-direction: column;
-  gap: 32rpx;
+  gap: 24rpx;
+  padding: 16rpx 24rpx 180rpx;
 }
 
 .favorites-group {
@@ -200,17 +201,31 @@ const handleUnfavorite = (item: FavoriteItem) => {
 
 .group-date {
   font-size: 24rpx;
-  color: #999999;
+  color: $text-hint;
   padding-left: 8rpx;
+  font-weight: 500;
 }
 
 /* 收藏卡片 */
 .favorite-card {
-  background: #FFFFFF;
-  border-radius: 20rpx;
-  padding: 28rpx;
-  margin-bottom: 24rpx;
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.03);
+  background: $card-bg;
+  border-radius: 28rpx;
+  padding: 32rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.02);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 装饰圆 */
+.card-decor {
+  position: absolute;
+  right: -40rpx;
+  bottom: -40rpx;
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 50%;
+  background: #FFF1F2;
+  z-index: 0;
 }
 
 /* 卡片顶部：标签 + 红心 */
@@ -224,10 +239,12 @@ const handleUnfavorite = (item: FavoriteItem) => {
 /* 餐次色块标签 */
 .meal-badge {
   display: inline-block;
-  padding: 6rpx 16rpx;
-  border-radius: 8rpx;
+  padding: 8rpx 20rpx;
+  border-radius: 12rpx;
   font-size: 22rpx;
-  font-weight: 500;
+  font-weight: 600;
+  position: relative;
+  z-index: 1;
 }
 
 .meal-badge.breakfast {
@@ -253,29 +270,29 @@ const handleUnfavorite = (item: FavoriteItem) => {
 /* 红心图标 */
 .heart-icon {
   color: #FF6B6B;
-  font-size: 36rpx;
-}
-
-.iconfont-filled {
-  font-family: uni-icons;
+  font-size: 40rpx;
+  position: relative;
+  z-index: 1;
 }
 
 /* 卡片主体 */
 .card-body {
   margin-bottom: 20rpx;
+  position: relative;
+  z-index: 1;
 }
 
 .card-title {
   display: block;
-  font-size: 32rpx;
-  color: #333333;
-  font-weight: 600;
+  font-size: 30rpx;
+  color: $text-primary;
+  font-weight: 700;
   margin-bottom: 8rpx;
 }
 
 .card-ingredients {
   font-size: 24rpx;
-  color: #666666;
+  color: $text-secondary;
   line-height: 1.5;
 }
 
@@ -284,15 +301,16 @@ const handleUnfavorite = (item: FavoriteItem) => {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  position: relative;
+  z-index: 1;
 }
 
 .view-recipe-btn {
-  padding: 10rpx 28rpx;
-  border-radius: 10rpx;
+  padding: 12rpx 28rpx;
+  border-radius: 12rpx;
   font-size: 24rpx;
-  color: #FF9882;
-  background: #FFF5F3;
-  border: 1rpx solid #FF9882;
+  color: $primary;
+  background: rgba(255, 107, 107, 0.1);
 }
 
 /* 空状态 */
@@ -305,12 +323,12 @@ const handleUnfavorite = (item: FavoriteItem) => {
 
 .empty-text {
   font-size: 28rpx;
-  color: #999999;
+  color: $text-secondary;
   margin-bottom: 16rpx;
 }
 
 .empty-hint {
   font-size: 24rpx;
-  color: #BBBBBB;
+  color: $text-hint;
 }
 </style>

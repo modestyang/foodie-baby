@@ -10,7 +10,7 @@ exports.main = async (event, context) => {
     return { success: false, error: '无法获取用户身份' }
   }
 
-  const { meals } = event
+  const { meals, dateStr } = event
 
   if (!meals || !Array.isArray(meals)) {
     return { success: false, error: '缺少食谱数据' }
@@ -18,13 +18,17 @@ exports.main = async (event, context) => {
 
   try {
     const db = cloud.database()
+    // 统一使用客户端传入的 dateStr，避免时区问题
+    const todayStr = dateStr
+
     const res = await db.collection('recipes').add({
       data: {
         _openid: openid,
         meals,
         status: 'pending',
+        is_favorite: false,
         created_at: new Date(),
-        created_at_str: new Date().toISOString().split('T')[0]
+        created_at_str: todayStr
       }
     })
 

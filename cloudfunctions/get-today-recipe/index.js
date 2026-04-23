@@ -12,7 +12,9 @@ exports.main = async (event, context) => {
 
   try {
     const db = cloud.database()
-    const today = new Date().toISOString().split('T')[0]
+    // 统一使用客户端传入的 dateStr，避免时区问题
+    const { dateStr } = event
+    const today = dateStr
 
     // 查找今天创建的食谱（未反馈的）
     const res = await db.collection('recipes')

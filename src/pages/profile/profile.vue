@@ -17,6 +17,7 @@
 
       <!-- Section 1: 基本信息 -->
       <view class="form-card">
+        <view class="card-decor"></view>
         <view class="section-header">
           <text class="section-title">基本信息</text>
         </view>
@@ -73,6 +74,7 @@
 
       <!-- Section 2: 健康信息 -->
       <view class="form-card">
+        <view class="card-decor"></view>
         <view class="section-header">
           <text class="section-title">健康信息</text>
         </view>
@@ -128,6 +130,7 @@
 
       <!-- Section 3: 地区信息 -->
       <view class="form-card">
+        <view class="card-decor"></view>
         <view class="section-header">
           <text class="section-title">地区信息</text>
         </view>
@@ -145,6 +148,27 @@
               {{ form.city || '请选择城市' }}
             </view>
           </picker>
+        </view>
+
+        <!-- 食谱偏好 -->
+        <view class="form-item">
+          <view class="form-label">食谱偏好</view>
+          <view class="radio-group">
+            <view
+              class="radio-item"
+              :class="{ active: form.diversity_prefer === 'diverse', disabled: !isEditing }"
+              @click="isEditing && (form.diversity_prefer = 'diverse')"
+            >
+              多样化
+            </view>
+            <view
+              class="radio-item"
+              :class="{ active: form.diversity_prefer === 'single', disabled: !isEditing }"
+              @click="isEditing && (form.diversity_prefer = 'single')"
+            >
+              单一化
+            </view>
+          </view>
         </view>
       </view>
 
@@ -193,24 +217,62 @@ const form = reactive({
   cityArray: [] as string[],
   allergies: [] as string[],
   taste_like: [] as string[],
-  taste_dislike: [] as string[]
+  taste_dislike: [] as string[],
+  diversity_prefer: 'diverse' as 'diverse' | 'single'
 })
 
 onMounted(() => {
   const pages = getCurrentPages()
   const currentPage = pages[pages.length - 1] as any
   const options = currentPage?.options || {}
-  const id = options.id
 
-  if (id) {
-    isEditing.value = true
-    profileId.value = id
-    loadProfile(id)
+  // 从本地存储读取档案数据（从首页/我的页面跳转时使用）
+  if (options.from === 'list') {
+    const stored = uni.getStorageSync('currentProfile')
+    if (stored && stored._id) {
+      profileId.value = stored._id
+      isEditing.value = true
+      form.nickname = stored.nickname || ''
+      form.birthday = stored.birthday || ''
+      // 标准化性别：数据库存 male/female，需转为 男/女
+      if (stored.gender === 'male') form.gender = '男'
+      else if (stored.gender === 'female') form.gender = '女'
+      else form.gender = stored.gender || ''
+      form.city = stored.city || ''
+      form.cityArray = stored.city ? [stored.city] : []
+      form.allergies = stored.allergies || []
+      form.taste_like = stored.taste_like || []
+      form.taste_dislike = stored.taste_dislike || []
+      form.diversity_prefer = stored.diversity_prefer || 'diverse'
+    }
+  }
+
+  // 通过 data 参数传入完整档案对象（备用）
+  if (options.data) {
+    try {
+      const profileData = JSON.parse(decodeURIComponent(options.data))
+      profileId.value = profileData._id
+      isEditing.value = true
+      form.nickname = profileData.nickname || ''
+      form.birthday = profileData.birthday || ''
+      // 标准化性别：数据库存 male/female，需转为 男/女
+      if (profileData.gender === 'male') form.gender = '男'
+      else if (profileData.gender === 'female') form.gender = '女'
+      else form.gender = profileData.gender || ''
+      form.city = profileData.city || ''
+      form.cityArray = profileData.city ? [profileData.city] : []
+      form.allergies = profileData.allergies || []
+      form.taste_like = profileData.taste_like || []
+      form.taste_dislike = profileData.taste_dislike || []
+      form.diversity_prefer = profileData.diversity_prefer || 'diverse'
+    } catch (e) {
+      console.error('解析档案数据失败', e)
+    }
   }
 })
 
 const loadProfile = (id: string) => {
-  // TODO: 从云数据库加载现有档案
+  // 已通过 data 参数传递，不再需要
 }
 
 const toggleEdit = () => {
@@ -285,13 +347,15 @@ const handleSave = async () => {
       (uni as any).cloud.callFunction({
         name: 'save-profile',
         data: {
+          _id: profileId.value,
           nickname: form.nickname,
           birthday: form.birthday,
           gender: form.gender,
           city: form.city,
           allergies: form.allergies,
           taste_like: form.taste_like,
-          taste_dislike: form.taste_dislike
+          taste_dislike: form.taste_dislike,
+          diversity_prefer: form.diversity_prefer
         },
         success: (r: any) => resolve(r),
         fail: (err: any) => reject(err)
@@ -302,6 +366,11 @@ const handleSave = async () => {
     if (res.result?.success) {
       uni.showToast({ title: '保存成功', icon: 'success' })
       isEditing.value = false
+      // 清除缓存，确保下次加载最新数据
+      uni.removeStorageSync('currentProfile')
+      uni.removeStorageSync('cachedTodayMeals')
+      uni.removeStorageSync('cachedRecipeId')
+      uni.removeStorageSync('cachedIsFavorited')
     } else {
       uni.showToast({ title: res.result?.error || '保存失败', icon: 'none' })
     }
@@ -319,21 +388,28 @@ const handleSave = async () => {
 .profile-page {
   min-height: 100vh;
   background-color: $background;
-  padding: 32rpx;
+  padding: 0;
   padding-bottom: 40rpx;
 }
 
+/* 页面标题 */
 .page-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16rpx 0 40rpx;
+  padding: 48rpx 32rpx 16rpx;
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(10px);
 }
 
 .page-title {
-  font-size: 40rpx;
-  font-weight: 600;
+  font-size: 36rpx;
+  font-weight: 800;
   color: $text-primary;
+  letter-spacing: -0.5px;
 }
 
 .edit-btn {
@@ -350,23 +426,42 @@ const handleSave = async () => {
   }
 }
 
+/* 表单容器 */
 .form-container {
   display: flex;
   flex-direction: column;
   gap: 24rpx;
+  padding: 16rpx 24rpx 180rpx;
 }
 
+/* 表单卡片 */
 .form-card {
   background: $card-bg;
-  border-radius: $card-radius;
+  border-radius: 28rpx;
   padding: 32rpx;
-  box-shadow: 0 2rpx 16rpx $shadow-light;
+  box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.02);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 装饰圆 */
+.card-decor {
+  position: absolute;
+  right: -40rpx;
+  bottom: -40rpx;
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 50%;
+  background: #FFF1F2;
+  z-index: 0;
 }
 
 .section-header {
   margin-bottom: 32rpx;
   padding-bottom: 20rpx;
-  border-bottom: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid rgba(0, 0, 0, 0.05);
+  position: relative;
+  z-index: 1;
 }
 
 .section-title {
@@ -380,6 +475,8 @@ const handleSave = async () => {
   flex-direction: column;
   gap: 16rpx;
   margin-bottom: 28rpx;
+  position: relative;
+  z-index: 1;
 
   &:last-child {
     margin-bottom: 0;
@@ -399,7 +496,8 @@ const handleSave = async () => {
   height: 80rpx;
   padding: 0 24rpx;
   background-color: #f8f8f8;
-  border-radius: 16rpx;
+  border-radius: 12rpx;
+  border: 1rpx solid #f0f0f0;
   font-size: 28rpx;
   color: $text-primary;
   transition: opacity 0.2s;
@@ -417,7 +515,8 @@ const handleSave = async () => {
   height: 80rpx;
   padding: 0 24rpx;
   background-color: #f8f8f8;
-  border-radius: 16rpx;
+  border-radius: 12rpx;
+  border: 1rpx solid #f0f0f0;
   font-size: 28rpx;
   color: $text-primary;
   display: flex;
@@ -435,7 +534,7 @@ const handleSave = async () => {
 
 .radio-group {
   display: flex;
-  gap: 24rpx;
+  gap: 16rpx;
 }
 
 .radio-item {
@@ -445,7 +544,8 @@ const handleSave = async () => {
   align-items: center;
   justify-content: center;
   background-color: #f8f8f8;
-  border-radius: 16rpx;
+  border-radius: 12rpx;
+  border: 1rpx solid #f0f0f0;
   font-size: 28rpx;
   color: $text-secondary;
   transition: all 0.2s;
@@ -453,6 +553,7 @@ const handleSave = async () => {
   &.active {
     background: linear-gradient(135deg, $primary-gradient-start, $primary-gradient-end);
     color: #fff;
+    border-color: transparent;
     box-shadow: 0 4rpx 16rpx rgba(255, 107, 107, 0.3);
   }
 
@@ -470,7 +571,8 @@ const handleSave = async () => {
 .tag-item {
   padding: 14rpx 28rpx;
   background-color: #f8f8f8;
-  border-radius: 32rpx;
+  border-radius: 12rpx;
+  border: 1rpx solid #f0f0f0;
   font-size: 26rpx;
   color: $text-secondary;
   transition: all 0.2s;
@@ -478,6 +580,7 @@ const handleSave = async () => {
   &.active {
     background: linear-gradient(135deg, $primary-gradient-start, $primary-gradient-end);
     color: #fff;
+    border-color: transparent;
     box-shadow: 0 4rpx 16rpx rgba(255, 107, 107, 0.3);
   }
 

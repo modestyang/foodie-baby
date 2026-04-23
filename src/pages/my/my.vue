@@ -1,162 +1,174 @@
 <template>
   <view class="my-page">
-    <view class="user-card" v-if="profile" @click="goToEdit(profile)">
-      <view class="avatar">{{ profile.gender === 'male' ? '男' : '女' }}</view>
-      <view class="info">
-        <text class="nickname">{{ profile.nickname }}</text>
-        <text class="age">{{ profile.ageMonths }}个月 · {{ profile.gender === 'male' ? '男宝宝' : '女宝宝' }}</text>
-      </view>
-      <text class="arrow">></text>
-    </view>
-
-    <view class="empty-card" v-else @click="goToProfile">
-      <text>添加宝宝信息</text>
-    </view>
-
+    <!-- 功能列表 -->
     <view class="menu-list">
-      <view class="menu-item" @click="goToProfileList">
-        <text>宝宝档案</text>
-        <text class="arrow">></text>
+      <view class="menu-item" @click="goToHistory">
+        <view class="menu-icon blue">
+          <text class="iconfont icon-time"></text>
+        </view>
+        <text class="menu-text">历史食谱</text>
+      </view>
+
+      <view class="menu-item" @click="goToFavorites">
+        <view class="menu-icon pink">
+          <text class="iconfont icon-favor"></text>
+        </view>
+        <text class="menu-text">我的收藏</text>
+      </view>
+
+      <view class="menu-item" @click="goToProfile">
+        <view class="menu-icon orange">
+          <text class="iconfont icon-profile"></text>
+        </view>
+        <text class="menu-text">宝宝档案</text>
       </view>
     </view>
 
+    <!-- 关于区域 -->
     <view class="about-section">
       <text class="about-title">关于</text>
       <view class="menu-item">
-        <text>版本</text>
+        <text class="menu-text">版本</text>
         <text class="version">v1.0.0</text>
       </view>
     </view>
+
+    <!-- 自定义TabBar -->
+    <TabBar />
   </view>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import TabBar from '@/components/TabBar.vue'
 
 const profile = ref<any>(null)
 
-const goToEdit = (profile: any) => {
-  uni.navigateTo({ url: `/pages/profile/profile?id=${profile._id}` })
+const loadProfile = () => {
+  return new Promise((resolve) => {
+    uni.cloud.callFunction({
+      name: 'get-profile',
+      success: (res: any) => {
+        const result = res.result || res
+        if (result?.success && result?.data?.length > 0) {
+          const profiles = result.data
+          profile.value = profiles.find((p: any) => p.isDefault) || profiles[0] || null
+        }
+        resolve(profile.value)
+      },
+      fail: () => resolve(null)
+    })
+  })
 }
 
-const goToProfile = () => {
-  uni.navigateTo({ url: '/pages/profile/profile' })
+const goToProfile = async () => {
+  if (!profile.value) {
+    await loadProfile()
+  }
+  if (profile.value?._id) {
+    uni.setStorageSync('currentProfile', profile.value)
+    uni.navigateTo({ url: '/pages/profile/profile?from=list' })
+  } else {
+    uni.navigateTo({ url: '/pages/profile/profile?action=add' })
+  }
 }
 
-const goToProfileList = () => {
-  uni.navigateTo({ url: '/pages/profile/list' })
+const goToHistory = () => {
+  uni.switchTab({ url: '/pages/history/history' })
+}
+
+const goToFavorites = () => {
+  uni.navigateTo({ url: '/pages/favorites/favorites' })
 }
 
 onMounted(() => {
-  console.log('[my] onMounted - 开始调用云函数')
-  uni.cloud.callFunction({
-    name: 'get-profile',
-    timeout: 10000,
-    success: (res: any) => {
-      console.log('[my] get-profile success:', res)
-      if (res.result?.success !== false) {
-        const profiles = res.result?.data || []
-        profile.value = profiles.find((p: any) => p.isDefault) || profiles[0] || null
-      }
-    },
-    fail: (err: any) => {
-      console.error('[my] get-profile fail:', err)
-    }
-  })
+  loadProfile()
 })
 </script>
 
 <style lang="scss" scoped>
+@import '@/styles/variables.scss';
+
 .my-page {
   min-height: 100vh;
-  background: #f5f5f5;
-  padding: 32rpx;
+  background: $background;
+  padding: 0 0 120rpx 0;
 }
 
-.user-card {
-  background: #fff;
-  border-radius: 16rpx;
-  padding: 32rpx;
-  display: flex;
-  align-items: center;
-
-  .avatar {
-    width: 96rpx;
-    height: 96rpx;
-    background: #4CAF50;
-    border-radius: 48rpx;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 36rpx;
-    color: #fff;
-    margin-right: 24rpx;
-  }
-
-  .info {
-    flex: 1;
-
-    .nickname {
-      font-size: 32rpx;
-      color: #333;
-      font-weight: 600;
-    }
-
-    .age {
-      font-size: 26rpx;
-      color: #999;
-    }
-  }
-
-  .arrow {
-    color: #ccc;
-    font-size: 28rpx;
-  }
-}
-
-.empty-card {
-  background: #fff;
-  border-radius: 16rpx;
-  padding: 48rpx;
-  text-align: center;
-  color: #4CAF50;
-  font-size: 28rpx;
-}
-
-.menu-list,
-.about-section {
-  margin-top: 24rpx;
-  background: #fff;
-  border-radius: 16rpx;
+/* 功能列表 */
+.menu-list {
+  margin: 0 24rpx 24rpx;
+  background: $card-bg;
+  border-radius: 28rpx;
   overflow: hidden;
+  box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.02);
 }
 
 .menu-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 28rpx 24rpx;
-  border-bottom: 1rpx solid #f5f5f5;
-  font-size: 28rpx;
-  color: #333;
+  border-bottom: 1rpx solid rgba(0, 0, 0, 0.05);
+  position: relative;
+}
 
-  &:last-child {
-    border-bottom: none;
-  }
+.menu-item:last-child {
+  border-bottom: none;
+}
 
-  .arrow {
-    color: #ccc;
-  }
+.menu-icon {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 14rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 20rpx;
 
-  .version {
-    color: #999;
+  &.blue { background: rgba(59, 130, 246, 0.1); color: #3B82F6; }
+  &.pink { background: rgba(244, 63, 94, 0.1); color: #F43F5E; }
+  &.orange { background: rgba(255, 152, 0, 0.1); color: #FF9800; }
+  &.gray { background: rgba(0, 0, 0, 0.05); color: #999; }
+
+  .iconfont {
+    font-size: 28rpx;
   }
 }
 
-.about-title {
-  display: block;
-  padding: 24rpx 24rpx 16rpx;
-  font-size: 24rpx;
-  color: #999;
+.menu-text {
+  flex: 1;
+  font-size: 28rpx;
+  color: $text-primary;
+  font-weight: 500;
+}
+
+/* 关于区域 */
+.about-section {
+  margin: 0 24rpx;
+  background: $card-bg;
+  border-radius: 28rpx;
+  overflow: hidden;
+  box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.02);
+
+  .about-title {
+    display: block;
+    padding: 24rpx 24rpx 16rpx;
+    font-size: 24rpx;
+    color: $text-hint;
+  }
+
+  .menu-item {
+    padding: 28rpx 24rpx;
+
+    .menu-text {
+      font-weight: 400;
+      color: $text-secondary;
+    }
+
+    .version {
+      color: $text-hint;
+      font-size: 26rpx;
+    }
+  }
 }
 </style>

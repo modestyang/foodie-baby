@@ -1,10 +1,5 @@
 <template>
   <view class="history-page">
-    <!-- 页面标题 -->
-    <view class="page-header">
-      <text class="page-title">历史记录</text>
-    </view>
-
     <!-- 筛选 Tab 栏 -->
     <view class="filter-tabs-wrapper">
       <view class="filter-tabs">
@@ -27,6 +22,7 @@
       class="history-scroll"
       scroll-y
       :refresher-enabled="true"
+      :refresher-triggered="isRefreshing"
       @refresherrefresh="onRefresh"
     >
       <view class="history-list">
@@ -41,28 +37,16 @@
             class="history-card"
             @click="handleView(item)"
           >
-            <!-- 卡片头部：日期+餐次 -->
-            <view class="card-header">
-              <text class="card-date">{{ formatCardDate(item.created_at) }}</text>
-              <text class="card-separator">·</text>
-              <text class="card-meal-type">{{ getMealTypeText(item.meals?.[0]?.type) }}</text>
-            </view>
-
-            <!-- 卡片主体：食谱名称 -->
-            <view class="card-body">
-              <text class="card-title">{{ item.meals?.[0]?.name || '未命名食谱' }}</text>
-              <text class="card-ingredients">{{ getIngredients(item.meals?.[0]) }}</text>
-            </view>
-
-            <!-- 卡片底部：状态+操作 -->
-            <view class="card-footer">
-              <view class="card-status" :class="item.status || 'pending'">
-                <text class="status-dot"></text>
-                <text class="status-text">{{ getStatusText(item.status) }}</text>
-              </view>
-              <view class="card-actions">
-                <view class="action-btn" @click.stop="handleView(item)">查看</view>
-                <view class="action-btn primary" @click.stop="handleReuse(item)">复用</view>
+            <view class="card-decor"></view>
+            <!-- 卡片主体：显示四餐信息 -->
+            <view class="card-meals">
+              <view
+                v-for="(meal, mealIdx) in (item.meals || []).slice(0, 4)"
+                :key="mealIdx"
+                class="meal-row"
+              >
+                <view class="meal-tag" :class="'meal-tag-' + mealIdx">{{ getMealLabel(mealIdx) }}</view>
+                <text class="meal-name">{{ meal.name || '未命名' }}</text>
               </view>
             </view>
           </view>
@@ -80,11 +64,15 @@
         </view>
       </view>
     </scroll-view>
+
+    <!-- 自定义TabBar -->
+    <TabBar />
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
+import TabBar from '@/components/TabBar.vue'
 
 interface Meal {
   name?: string
@@ -109,6 +97,7 @@ const filterTabs = [
 const currentFilter = ref('all')
 const historyList = ref<HistoryItem[]>([])
 const loading = ref(false)
+const isRefreshing = ref(false)
 
 // Tab 切换
 const onTabChange = (value: string) => {
@@ -130,6 +119,8 @@ const loadHistory = async () => {
     })
     if (res.result?.success && res.result?.list) {
       historyList.value = res.result.list
+      // 确保视图更新
+      await nextTick()
     }
   } catch (err) {
     console.error('加载历史失败:', err)
@@ -140,17 +131,20 @@ const loadHistory = async () => {
 
 // 下拉刷新
 const onRefresh = async () => {
+  isRefreshing.value = true
   await loadHistory()
-  uni.stopPullDownRefresh()
+  isRefreshing.value = false
 }
 
 // 按日期分组
 const groupedHistory = computed(() => {
   const now = new Date()
   const filtered = historyList.value.filter(item => {
-    if (!item.created_at) return false
+    // 优先使用 created_at_str，没有则用 created_at 降序排列取日期部分
+    const dateStr = item.created_at_str || (item.created_at ? item.created_at.split('T')[0] : null)
+    if (!dateStr) return false
 
-    const itemDate = new Date(item.created_at)
+    const itemDate = new Date(dateStr + 'T00:00:00')
     if (currentFilter.value === 'week') {
       const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
       return itemDate >= weekAgo
@@ -164,7 +158,7 @@ const groupedHistory = computed(() => {
   // 按日期分组
   const groups: Record<string, HistoryItem[]> = {}
   filtered.forEach(item => {
-    const date = item.created_at?.split('T')[0] || '未知'
+    const date = item.created_at_str || (item.created_at ? item.created_at.split('T')[0] : '未知')
     if (!groups[date]) {
       groups[date] = []
     }
@@ -183,47 +177,22 @@ const groupedHistory = computed(() => {
 
 // 日期格式化
 const formatDate = (dateStr: string) => {
-  const date = new Date(dateStr)
+  // 使用本地日期字符串，避免时区问题
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
   const today = new Date()
   const yesterday = new Date(today)
   yesterday.setDate(yesterday.getDate() - 1)
 
   if (date.toDateString() === today.toDateString()) return '今天'
   if (date.toDateString() === yesterday.toDateString()) return '昨天'
-  return `${String(date.getMonth() + 1).padStart(2, '0')}月${String(date.getDate()).padStart(2, '0')}日`
+  return `${String(month).padStart(2, '0')}月${String(day).padStart(2, '0')}日`
 }
 
-// 卡片头部日期
-const formatCardDate = (dateStr?: string) => {
-  if (!dateStr) return ''
-  const date = new Date(dateStr)
-  return `${String(date.getMonth() + 1).padStart(2, '0')}月${String(date.getDate()).padStart(2, '0')}日`
-}
-
-// 状态文本
-const getStatusText = (status?: string) => {
-  switch (status) {
-    case 'adopted': return '已采纳'
-    case 'rejected': return '未采纳'
-    default: return '待反馈'
-  }
-}
-
-// 餐次类型文本
-const getMealTypeText = (type?: string) => {
-  const mealTypes: Record<string, string> = {
-    breakfast: '早餐',
-    lunch: '午餐',
-    snack: '下午茶',
-    dinner: '晚餐'
-  }
-  return type ? mealTypes[type] || type : ''
-}
-
-// 获取食材文本
-const getIngredients = (meal?: Meal) => {
-  if (!meal?.ingredients || !Array.isArray(meal.ingredients)) return ''
-  return meal.ingredients.slice(0, 3).join('、')
+// 获取餐次标签
+const getMealLabel = (index: number) => {
+  const labels = ['早餐', '中餐', '下午茶', '晚餐']
+  return labels[index] || ''
 }
 
 // 查看详情
@@ -233,16 +202,6 @@ const handleView = (item: HistoryItem) => {
       url: `/pages/recipe/recipe?data=${encodeURIComponent(JSON.stringify(item.meals))}`
     })
   }
-}
-
-// 复用
-const handleReuse = (item: HistoryItem) => {
-  if (item.meals) {
-    uni.navigateTo({
-      url: `/pages/recipe/recipe?data=${encodeURIComponent(JSON.stringify(item.meals))}`
-    })
-  }
-  uni.showToast({ title: '复用成功', icon: 'success' })
 }
 
 // 初始化加载
@@ -259,17 +218,8 @@ onMounted(() => {
   background-color: $background;
   display: flex;
   flex-direction: column;
-}
-
-/* 页面标题 */
-.page-header {
-  padding: 32rpx 32rpx 0;
-}
-
-.page-title {
-  font-size: 40rpx;
-  font-weight: 600;
-  color: $text-primary;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* 筛选 Tab 栏 */
@@ -333,7 +283,10 @@ onMounted(() => {
 /* 历史列表容器 */
 .history-scroll {
   flex: 1;
-  padding: 24rpx 32rpx 180rpx;
+  height: calc(100vh - 200rpx);
+  padding: 24rpx 32rpx 130rpx;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .history-list {
@@ -359,133 +312,90 @@ onMounted(() => {
 /* 食谱卡片 */
 .history-card {
   background: $card-bg;
-  border-radius: $card-radius;
-  padding: 28rpx;
-  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.04);
+  border-radius: 28rpx;
+  padding: 32rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.02);
+  margin-bottom: 24rpx;
+  position: relative;
+  overflow: hidden;
 }
 
-/* 卡片头部 */
-.card-header {
+.history-card:active {
+  opacity: 0.75;
+  transform: scale(0.98);
+}
+
+/* 装饰圆 */
+.card-decor {
+  position: absolute;
+  right: -40rpx;
+  bottom: -40rpx;
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 50%;
+  background: #EFF6FF;
+  z-index: 0;
+}
+
+/* 四餐展示 */
+.card-meals {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+  position: relative;
+  z-index: 1;
+}
+
+.meal-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.meal-row {
   display: flex;
   align-items: center;
-  gap: 8rpx;
-  margin-bottom: 16rpx;
-  padding-bottom: 16rpx;
-  border-bottom: 1rpx solid rgba(0, 0, 0, 0.05);
+  min-height: 56rpx;
 }
 
-.card-date {
+.meal-tag {
+  width: 100rpx;
+  height: 40rpx;
+  line-height: 40rpx;
+  font-size: 22rpx;
+  padding: 0;
+  border-radius: 8rpx;
+  font-weight: 500;
+  text-align: center;
+  flex-shrink: 0;
+  margin-right: 16rpx;
+}
+
+.meal-tag-0 {
+  background: rgba(255, 179, 71, 0.15);
+  color: #FFB347;
+}
+
+.meal-tag-1 {
+  background: rgba(99, 179, 253, 0.15);
+  color: #63B3FD;
+}
+
+.meal-tag-2 {
+  background: rgba(165, 155, 255, 0.15);
+  color: #A59BFF;
+}
+
+.meal-tag-3 {
+  background: rgba(255, 143, 143, 0.15);
+  color: #FF8F8F;
+}
+
+.meal-name {
   font-size: 26rpx;
   color: $text-primary;
-  font-weight: 500;
-}
-
-.card-separator {
-  font-size: 24rpx;
-  color: $text-hint;
-}
-
-.card-meal-type {
-  font-size: 24rpx;
-  color: $text-secondary;
-}
-
-/* 卡片主体 */
-.card-body {
-  margin-bottom: 20rpx;
-}
-
-.card-title {
-  display: block;
-  font-size: 30rpx;
   font-weight: 600;
-  color: $text-primary;
-  margin-bottom: 8rpx;
-}
-
-.card-ingredients {
-  font-size: 24rpx;
-  color: $text-secondary;
-  line-height: 1.5;
-}
-
-/* 卡片底部 */
-.card-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-/* 状态标签 */
-.card-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 8rpx;
-  padding: 8rpx 16rpx;
-  border-radius: 20rpx;
-  font-size: 22rpx;
-}
-
-.status-dot {
-  width: 8rpx;
-  height: 8rpx;
-  border-radius: 50%;
-}
-
-.status-text {
-  font-weight: 500;
-}
-
-.card-status.pending {
-  background: rgba($status-pending, 0.12);
-  color: $status-pending;
-
-  .status-dot {
-    background: $status-pending;
-  }
-}
-
-.card-status.adopted {
-  background: rgba($status-adopted, 0.12);
-  color: $status-adopted;
-
-  .status-dot {
-    background: $status-adopted;
-  }
-}
-
-.card-status.rejected {
-  background: rgba($status-rejected, 0.10);
-  color: $status-rejected;
-
-  .status-dot {
-    background: $status-rejected;
-  }
-}
-
-/* 操作按钮 */
-.card-actions {
-  display: flex;
-  gap: 12rpx;
-}
-
-.action-btn {
-  padding: 10rpx 24rpx;
-  border-radius: 24rpx;
-  font-size: 24rpx;
-  color: $text-secondary;
-  background: rgba(0, 0, 0, 0.04);
-  transition: all 0.2s ease;
-}
-
-.action-btn:active {
-  opacity: 0.7;
-  transform: scale(0.96);
-}
-
-.action-btn.primary {
-  color: #ffffff;
-  background: linear-gradient(135deg, $primary-gradient-start 0%, $primary-gradient-end 100%);
 }
 
 /* 空状态 */

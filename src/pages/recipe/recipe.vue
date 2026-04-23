@@ -12,38 +12,22 @@
     <view class="meals-container">
       <view
         class="meal-card"
-        :class="meal.type"
         v-for="(meal, index) in meals"
         :key="index"
+        :class="getMealClass(index)"
       >
         <!-- 餐次标题栏 -->
         <view class="meal-header">
-          <view class="meal-type-badge" :class="meal.type">
+          <view class="meal-type-badge" :class="getMealBadgeClass(index)">
             {{ mealTypeNames[index] }}
           </view>
-          <text class="meal-duration">{{ meal.duration }}分钟</text>
         </view>
 
         <!-- 餐次名称 -->
         <view class="meal-title">{{ meal.name }}</view>
 
-        <!-- 食材标签 -->
-        <view class="ingredients-row">
-          <text
-            class="ingredient-tag"
-            v-for="(ing, idx) in meal.ingredients"
-            :key="idx"
-          >{{ ing }}</text>
-        </view>
-
-        <!-- 做法按钮 -->
-        <view class="expand-btn" @click="toggleExpand(index)">
-          <text>做法</text>
-          <text class="arrow" :class="{ expanded: expandedIndex === index }">▼</text>
-        </view>
-
-        <!-- 展开的详细步骤 -->
-        <view class="detail-section" v-if="expandedIndex === index">
+        <!-- 做法默认展开 -->
+        <view class="detail-section">
           <MealDetail :meal="meal" />
         </view>
       </view>
@@ -51,9 +35,14 @@
 
     <!-- 底部操作栏 -->
     <view class="bottom-actions">
-      <view class="action-btn primary" @click="handleAdopt">采纳此食谱</view>
-      <view class="action-btn secondary" @click="handleRegenerate">重新生成</view>
-      <view class="action-link" @click="handleRecord">记录成果</view>
+      <view class="action-btn" :class="isFavorited ? 'favorited' : 'primary'" @click="handleFavorite">
+        <zx-icon :name="isFavorited ? 'favorfill' : 'favor'" :size="20" :color="isFavorited ? '#FF6B6B' : '#fff'" />
+        <text class="action-text">{{ isFavorited ? '取消收藏' : '收藏' }}</text>
+      </view>
+      <view class="action-btn secondary" :class="{ loading: isRegenerating }" @click="handleRegenerate">
+        <zx-icon name="refresh" :size="20" color="#666" />
+        <text class="action-text">{{ isRegenerating ? '换一批中' : '换一批' }}</text>
+      </view>
     </view>
   </view>
 </template>
@@ -61,6 +50,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import MealDetail from './components/MealDetail.vue'
+import { buildPrompt } from '@/utils/prompt'
+import { callLLMAPI, parseMealsFromResponse } from '@/utils/api'
 
 interface Meal {
   name: string
@@ -72,12 +63,33 @@ interface Meal {
 
 const mealTypeNames = ['早餐', '午餐', '下午茶', '晚餐']
 
+// 生成参数（从首页跳转时传入）
+const genParams = ref<any>(null)
+const recipeId = ref<string>('')
+const isRegenerating = ref(false)
+const isFavorited = ref(false)
+
 // 获取URL参数
-onMounted(() => {
+onMounted(async () => {
   const pages = getCurrentPages()
   const currentPage = pages[pages.length - 1]
   const options = (currentPage as any)?.options || {}
   const dataStr = options.data
+  const genParamsStr = options.genParams
+
+  if (genParamsStr) {
+    try {
+      genParams.value = JSON.parse(decodeURIComponent(genParamsStr))
+    } catch (e) {
+      console.error('解析生成参数失败', e)
+    }
+  }
+
+  // 解析食谱ID（收藏用）
+  const idStr = options.id
+  if (idStr) {
+    recipeId.value = decodeURIComponent(idStr)
+  }
 
   if (dataStr) {
     try {
@@ -95,6 +107,25 @@ onMounted(() => {
       console.error('解析食谱数据失败:', e)
     }
   }
+
+  // 加载食谱详情（获取收藏状态）
+  if (recipeId.value) {
+    try {
+      const res: any = await new Promise((resolve, reject) => {
+        uni.cloud.callFunction({
+          name: 'get-recipe',
+          data: { id: recipeId.value },
+          success: (r: any) => resolve(r),
+          fail: (err: any) => reject(err)
+        })
+      })
+      if (res.result?.success && res.result?.data) {
+        isFavorited.value = res.result.data.is_favorite || false
+      }
+    } catch (e) {
+      console.error('获取食谱详情失败', e)
+    }
+  }
 })
 
 // 格式化日期
@@ -106,22 +137,89 @@ const getDateStr = () => {
 const currentDate = ref(getDateStr())
 const meals = ref<Meal[]>([])
 
-const expandedIndex = ref<number | null>(null)
-
-const toggleExpand = (index: number) => {
-  expandedIndex.value = expandedIndex.value === index ? null : index
+const getMealClass = (index: number) => {
+  const classes = ['meal-breakfast', 'meal-lunch', 'meal-snack', 'meal-dinner']
+  return classes[index] || 'meal-breakfast'
 }
 
-const handleAdopt = () => {
-  uni.showToast({ title: '已采纳', icon: 'success' })
+const getMealBadgeClass = (index: number) => {
+  const classes = ['breakfast', 'lunch', 'snack', 'dinner']
+  return classes[index] || 'breakfast'
 }
 
-const handleRegenerate = () => {
-  uni.showToast({ title: '重新生成中', icon: 'loading' })
+const handleFavorite = async () => {
+  if (meals.value.length === 0) {
+    uni.showToast({ title: '暂无食谱可收藏', icon: 'none' })
+    return
+  }
+
+  // 如果没有 recipeId，先保存食谱获取 ID
+  if (!recipeId.value) {
+    uni.showToast({ title: '正在保存食谱...', icon: 'loading' })
+    try {
+      const now = new Date()
+      const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      const res: any = await new Promise((resolve, reject) => {
+        (uni as any).cloud.callFunction({
+          name: 'save-recipe',
+          data: { meals: meals.value, dateStr },
+          success: (r: any) => resolve(r),
+          fail: (err: any) => reject(err)
+        })
+      })
+      if (res.result?.success && res.result?.id) {
+        recipeId.value = res.result.id
+      } else {
+        uni.showToast({ title: '保存失败，请重试', icon: 'none' })
+        return
+      }
+    } catch (err) {
+      console.error('保存食谱失败:', err)
+      uni.showToast({ title: '保存失败', icon: 'none' })
+      return
+    }
+  }
+
+  try {
+    await new Promise((resolve, reject) => {
+      (uni as any).cloud.callFunction({
+        name: 'save-favorite',
+        data: { id: recipeId.value },
+        success: (r: any) => resolve(r),
+        fail: (err: any) => reject(err)
+      })
+    })
+    uni.showToast({ title: '已收藏', icon: 'success' })
+  } catch (err) {
+    console.error('收藏失败:', err)
+    uni.showToast({ title: '收藏失败', icon: 'none' })
+  }
 }
 
-const handleRecord = () => {
-  uni.navigateTo({ url: '/pages/profile/profile' })
+const handleRegenerate = async () => {
+  if (!genParams.value || isRegenerating.value) return
+  isRegenerating.value = true
+  uni.showToast({ title: '换一批中', icon: 'loading' })
+  try {
+    const p = genParams.value
+    const prompt = buildPrompt(p.ageMonths, p.allergies, p.tastePreferences, p.diversityPrefer, p.city)
+    const content = await callLLMAPI(prompt)
+    const newMeals = parseMealsFromResponse(content)
+    if (newMeals && newMeals.length > 0) {
+      meals.value = newMeals.map((meal: any, index: number) => ({
+        ...meal,
+        duration: 20,
+        type: ['breakfast', 'lunch', 'snack', 'dinner'][index] || 'meal'
+      }))
+      uni.showToast({ title: '已换一批', icon: 'success' })
+    } else {
+      uni.showToast({ title: '生成失败，请重试', icon: 'none' })
+    }
+  } catch (err) {
+    uni.showToast({ title: '换一批失败', icon: 'none' })
+  } finally {
+    isRegenerating.value = false
+  }
 }
 </script>
 
@@ -151,13 +249,13 @@ const handleRecord = () => {
 }
 
 .header-date {
-  font-size: 28rpx;
+  font-size: 24rpx;
   color: $text-hint;
 }
 
 .header-title {
-  font-size: 40rpx;
-  font-weight: 600;
+  font-size: 36rpx;
+  font-weight: 700;
   color: $text-primary;
 }
 
@@ -168,10 +266,26 @@ const handleRecord = () => {
 
 .meal-card {
   background: #fff;
-  border-radius: $card-radius;
+  border-radius: 20rpx;
   padding: 28rpx;
-  margin-bottom: 24rpx;
-  box-shadow: 0 2rpx 12rpx $shadow-light;
+  margin-bottom: 20rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.04);
+}
+
+.meal-breakfast {
+  background: linear-gradient(135deg, rgba(96, 165, 250, 0.1) 0%, rgba(147, 197, 253, 0.25) 100%);
+}
+
+.meal-lunch {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.1) 0%, rgba(255, 183, 140, 0.3) 100%);
+}
+
+.meal-snack {
+  background: linear-gradient(135deg, rgba(244, 143, 177, 0.08) 0%, rgba(252, 228, 236, 0.3) 100%);
+}
+
+.meal-dinner {
+  background: linear-gradient(135deg, rgba(121, 134, 203, 0.08) 0%, rgba(197, 202, 233, 0.3) 100%);
 }
 
 .meal-header {
@@ -182,77 +296,34 @@ const handleRecord = () => {
 }
 
 .meal-type-badge {
-  padding: 10rpx 20rpx;
+  padding: 6rpx 16rpx;
   border-radius: 8rpx;
-  font-size: 24rpx;
-  font-weight: 500;
+  font-size: 22rpx;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .meal-type-badge.breakfast {
-  background: $meal-breakfast;
-  color: #E65100;
+  color: #2563EB;
 }
 
 .meal-type-badge.lunch {
-  background: $meal-lunch;
-  color: #2E7D32;
+  color: #C2410C;
 }
 
 .meal-type-badge.snack {
-  background: $meal-snack;
   color: #7B1FA2;
 }
 
 .meal-type-badge.dinner {
-  background: $meal-dinner;
   color: #1565C0;
 }
 
-.meal-duration {
-  font-size: 24rpx;
-  color: $text-hint;
-}
-
 .meal-title {
-  font-size: 34rpx;
-  font-weight: 600;
+  font-size: 28rpx;
+  font-weight: 700;
   color: $text-primary;
-  margin-bottom: 20rpx;
-}
-
-.ingredients-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16rpx;
-  margin-bottom: 20rpx;
-}
-
-.ingredient-tag {
-  padding: 10rpx 18rpx;
-  background: #f8f6f3;
-  border-radius: 6rpx;
-  font-size: 24rpx;
-  color: $text-secondary;
-}
-
-/* 做法按钮 */
-.expand-btn {
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-  padding: 16rpx 0 8rpx;
-  font-size: 26rpx;
-  color: $primary;
-  font-weight: 500;
-}
-
-.arrow {
-  font-size: 20rpx;
-  transition: transform 0.3s ease;
-}
-
-.arrow.expanded {
-  transform: rotate(180deg);
+  margin-bottom: 12rpx;
 }
 
 /* 展开的详情区域 */
@@ -260,18 +331,6 @@ const handleRecord = () => {
   margin-top: 24rpx;
   padding-top: 24rpx;
   border-top: 1rpx solid #f0f0f0;
-  animation: slideDown 0.3s ease;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10rpx);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 /* 底部操作栏 */
@@ -290,36 +349,39 @@ const handleRecord = () => {
 }
 
 .action-btn {
+  flex: 1;
   height: 88rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 16rpx;
-  font-size: 30rpx;
+  font-size: 28rpx;
   font-weight: 500;
+  gap: 8rpx;
+  transition: all 0.2s ease;
+}
+
+.action-btn:active {
+  opacity: 0.8;
+  transform: scale(0.98);
 }
 
 .action-btn.primary {
-  flex: 2;
   background: linear-gradient(135deg, $primary-gradient-start 0%, $primary-gradient-end 100%);
   color: #ffffff;
 }
 
 .action-btn.secondary {
-  flex: 1;
-  background: transparent;
-  border: 2rpx solid $text-hint;
+  background: #f5f5f5;
   color: $text-primary;
 }
 
-.action-link {
-  flex: 1;
-  height: 88rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 26rpx;
-  color: $text-secondary;
-  text-decoration: underline;
+.action-btn.secondary.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.action-text {
+  font-size: 28rpx;
 }
 </style>

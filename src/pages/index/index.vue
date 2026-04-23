@@ -1,48 +1,42 @@
 <template>
   <view class="page-container">
-    <!-- 顶部导航 -->
-    <view class="top-nav">
-      <text class="nav-title">辅食日记</text>
-      <view class="nav-avatar" @click="goToProfile">
-        <text class="iconfont icon-baby avatar-icon"></text>
-        <view class="avatar-badge"></view>
-      </view>
-    </view>
-
+    
     <!-- 主内容区 -->
     <scroll-view class="main-content" scroll-y>
       <!-- 1. 宝宝信息卡片 -->
       <view class="baby-card" @click="goToProfile">
         <view class="baby-left">
           <view class="baby-avatar">
-            <text class="avatar-text">团</text>
+            <text class="avatar-text">{{ profile ? profile.nickname?.slice(0, 1) : '?' }}</text>
           </view>
           <view class="baby-info">
-            <view class="baby-name-row">
-              <text class="baby-name">小团子</text>
-              <text class="age-badge">8月龄</text>
+            <view class="baby-name-row" v-if="profile">
+              <text class="baby-name">{{ profile.nickname || '未命名' }}</text>
+              <text class="age-badge">{{ profile.ageMonths }}月龄</text>
             </view>
-            <text class="baby-stage">已进入"块状食物"适应期</text>
+            <text class="baby-stage" v-if="profile">{{ profile.stage || '已添加档案' }}</text>
+            <text class="baby-stage" v-else>点击录入宝宝档案</text>
           </view>
         </view>
         <text class="iconfont icon-right chevron"></text>
       </view>
 
-      <!-- 2. AI生成按钮 -->
-      <button class="ai-generate-btn" @click="handleGenerate" :disabled="isLoading">
-        <view class="ai-decor"></view>
+      <!-- 2. 生成按钮 -->
+      <button class="generate-btn" @click="handleGenerate" :disabled="isLoading" v-if="todayMeals.length === 0">
+        <view class="decor"></view>
         <text class="iconfont icon-service chef-icon"></text>
-        <view class="ai-badge">
+        <view class="badge">
           <text class="wand-icon">✨</text>
-          <text class="ai-label">AI Smart Menu</text>
+          <text class="label">Smart Menu</text>
         </view>
-        <view class="ai-title-row">
-          <text class="ai-title">定制今日食谱</text>
+        <view class="title-row">
+          <text class="title">定制今日食谱</text>
           <text class="sparkle">✨</text>
         </view>
-        <text class="ai-desc">根据小团子营养需求，智能规划四餐</text>
+        <text class="desc">根据小团子营养需求，智能规划四餐</text>
       </button>
 
+      
       <!-- 3. 历史与收藏 -->
       <view class="grid-2">
         <button class="history-card" @click="goToHistory">
@@ -69,75 +63,34 @@
       </view>
 
       <!-- 4. 今日推荐四餐 -->
-      <view class="meals-section">
+      <view class="meals-section" v-if="todayMeals.length > 0">
         <view class="section-header">
           <text class="section-title">今日推荐四餐</text>
-          <button class="refresh-btn">换一换</button>
+          <view class="header-btns">
+            <button class="action-btn" @click="goToRecipeDetail">查看详情</button>
+            <button class="action-btn" :class="{ 'btn-favorited': isFavorited }" @click="toggleFavorite">{{ isFavorited ? '取消收藏' : '收藏' }}</button>
+            <button class="action-btn" :class="{ 'btn-loading': isLoading }" :disabled="isLoading" @click="refreshMeals">{{ isLoading ? '替换中' : '换一换' }}</button>
+          </view>
         </view>
 
         <view class="meals-card">
-          <view class="timeline">
-            <!-- 早餐 -->
-            <view class="timeline-item">
-              <view class="timeline-dot breakfast">
-                <text class="iconfont icon-timefill dot-icon"></text>
-              </view>
-              <view class="meal-content">
-                <view class="meal-header">
-                  <text class="meal-type">早餐</text>
-                  <text class="meal-time">08:00</text>
+          <view class="timeline-wrap">
+            <view class="timeline-line"></view>
+            <view class="timeline-list">
+              <view v-for="(meal, index) in todayMeals" :key="index" class="timeline-item">
+                <view :class="['timeline-dot', getMealBg(meal.type)]">
+                  <zx-icon :name="getMealIcon(meal.type)" :size="28" :color="getMealIconColor(meal.type)" />
                 </view>
-                <text class="meal-title">苹果燕麦泥</text>
-                <text class="meal-ingredients">苹果 50g, 燕麦 20g</text>
-                <button class="recipe-btn" @click="showMealDetail(0)">做法 ›</button>
-              </view>
-            </view>
-
-            <!-- 午餐 -->
-            <view class="timeline-item">
-              <view class="timeline-dot lunch">
-                <text class="iconfont icon-service dot-icon"></text>
-              </view>
-              <view class="meal-content">
-                <view class="meal-header">
-                  <text class="meal-type">午餐</text>
-                  <text class="meal-time">12:00</text>
+                <view class="meal-content">
+                  <view class="meal-header">
+                    <text class="meal-type">{{ meal.type }}</text>
+                    <text class="meal-time">{{ meal.time || '' }}</text>
+                  </view>
+                  <text class="meal-title">{{ meal.name }}</text>
+                  <view class="meal-ingredients-wrap">
+                    <text class="meal-ingredients">{{ formatIngredients(meal.ingredients) }}</text>
+                  </view>
                 </view>
-                <text class="meal-title">三文鱼土豆浓汤</text>
-                <text class="meal-ingredients">三文鱼 30g, 土豆 40g, 奶 20ml</text>
-                <button class="recipe-btn" @click="showMealDetail(1)">做法 ›</button>
-              </view>
-            </view>
-
-            <!-- 下午茶 -->
-            <view class="timeline-item">
-              <view class="timeline-dot snack">
-                <text class="iconfont icon-favorfill dot-icon"></text>
-              </view>
-              <view class="meal-content">
-                <view class="meal-header">
-                  <text class="meal-type">下午茶</text>
-                  <text class="meal-time">15:30</text>
-                </view>
-                <text class="meal-title">香蕉软松饼</text>
-                <text class="meal-ingredients">香蕉半根, 面粉 20g, 蛋黄 1个</text>
-                <button class="recipe-btn" @click="showMealDetail(2)">做法 ›</button>
-              </view>
-            </view>
-
-            <!-- 晚餐 -->
-            <view class="timeline-item">
-              <view class="timeline-dot dinner">
-                <text class="iconfont icon-homefill dot-icon"></text>
-              </view>
-              <view class="meal-content">
-                <view class="meal-header">
-                  <text class="meal-type">晚餐</text>
-                  <text class="meal-time">18:30</text>
-                </view>
-                <text class="meal-title">番茄牛肉软面</text>
-                <text class="meal-ingredients">番茄 30g, 牛肉 20g, 碎面 25g</text>
-                <button class="recipe-btn" @click="showMealDetail(3)">做法 ›</button>
               </view>
             </view>
           </view>
@@ -162,24 +115,101 @@
         </view>
       </view>
     </view>
+
+    <!-- 自定义TabBar -->
+    <TabBar />
+
+    <!-- 调试日志浮标 -->
+    <view class="debug-float" @click="showDebugLogs = !showDebugLogs">
+      <text class="debug-btn">🪵</text>
+    </view>
+
+    <!-- 调试日志面板 -->
+    <view class="debug-panel" v-if="showDebugLogs">
+      <view class="debug-header">
+        <text class="debug-title">调试日志 {{ debugLogs.length > 0 ? '(' + debugLogs.length + ')' : '' }}</text>
+        <text class="debug-close" @click.stop="showDebugLogs = false">✕</text>
+      </view>
+      <scroll-view class="debug-content" scroll-y>
+        <text v-if="debugLogs.length === 0" class="log-line log-empty">点击生成食谱后，日志将显示在这里...</text>
+        <text v-for="(log, idx) in debugLogs" :key="idx" class="log-line">{{ log }}</text>
+      </scroll-view>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import TabBar from '@/components/TabBar.vue'
+import { buildPrompt } from '@/utils/prompt'
+import { callLLMAPI, parseMealsFromResponse } from '@/utils/api'
 
 const isLoading = ref(false)
+const showDebugLogs = ref(false)
+const debugLogs = ref<string[]>([])
 const showTrialModal = ref(false)
 const trialAge = ref<number | null>(null)
 const profile = ref<any>(null)
 const todayMeals = ref<any[]>([])
+const recipeId = ref<string>('')
+const isFavorited = ref(false)
 
-// API 配置
-const API_KEY = 'sk-fcb46129ad3c44b5b3b294fc8245d972'
-const BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+// 调试日志
+const addLog = (msg: string) => {
+  const time = new Date().toLocaleTimeString()
+  debugLogs.value.push(`[${time}] ${msg}`)
+  console.log(msg)
+}
+
+// 辅助函数：获取餐次背景色
+const getMealBg = (type: string) => {
+  const map: Record<string, string> = {
+    '早餐': 'breakfast', '午餐': 'lunch', '下午茶': 'snack', '晚餐': 'dinner'
+  }
+  return map[type] || 'breakfast'
+}
+
+// 辅助函数：获取餐次图标
+const getMealIcon = (type: string) => {
+  const map: Record<string, string> = {
+    '早餐': 'time', '午餐': 'star', '下午茶': 'favor', '晚餐': 'home'
+  }
+  return map[type] || 'time'
+}
+
+// 辅助函数：获取餐次图标颜色
+const getMealIconColor = (type: string) => {
+  const map: Record<string, string> = {
+    '早餐': '#f59e0b', '午餐': '#f97316', '下午茶': '#ec4899', '晚餐': '#6366f1'
+  }
+  return map[type] || '#f59e0b'
+}
+
+// 辅助函数：格式化食材
+const formatIngredients = (ingredients: any) => {
+  if (Array.isArray(ingredients)) return ingredients.join(', ')
+  if (typeof ingredients === 'string') return ingredients
+  return ''
+}
 
 // 获取宝宝档案
 const loadProfile = async () => {
+  // 优先从启动页缓存读取
+  const cached = uni.getStorageSync('currentProfile')
+  if (cached) {
+    const found = cached
+    if (found.birthday) {
+      const birthDate = new Date(found.birthday)
+      const now = new Date()
+      const months = (now.getFullYear() - birthDate.getFullYear()) * 12 + (now.getMonth() - birthDate.getMonth())
+      found.ageMonths = months
+    }
+    if (found.gender === 'male' || found.gender === '女') found.genderText = '男'
+    else if (found.gender === 'female' || found.gender === '男') found.genderText = '女'
+    profile.value = found
+    return
+  }
+
   try {
     const res: any = await new Promise((resolve, reject) => {
       uni.cloud.callFunction({
@@ -188,8 +218,24 @@ const loadProfile = async () => {
         fail: (err: any) => reject(err)
       })
     })
-    if (res.result?.success && res.result?.data?.length > 0) {
-      profile.value = res.result.data.find((p: any) => p.isDefault) || res.result.data[0]
+    // 修复：云函数直接返回 { success, data }，不是 { result: { success, data } }
+    const result = res.result || res
+    if (result?.success && result?.data?.length > 0) {
+      const profiles = result.data
+      // 查找默认档案
+      let found = profiles.find((p: any) => p.isDefault)
+      if (!found) found = profiles[0]
+      // 计算月龄
+      if (found.birthday) {
+        const birthDate = new Date(found.birthday)
+        const now = new Date()
+        const months = (now.getFullYear() - birthDate.getFullYear()) * 12 + (now.getMonth() - birthDate.getMonth())
+        found.ageMonths = months
+      }
+      // 标准化性别显示
+      if (found.gender === 'male' || found.gender === '女') found.genderText = '男'
+      else if (found.gender === 'female' || found.gender === '男') found.genderText = '女'
+      profile.value = found
     }
   } catch (err) {
     console.error('获取档案失败:', err)
@@ -199,15 +245,34 @@ const loadProfile = async () => {
 // 加载今日食谱
 const loadTodayRecipe = async () => {
   try {
+    // 优先从启动页缓存读取
+    const cached = uni.getStorageSync('cachedTodayMeals')
+    const cachedId = uni.getStorageSync('cachedRecipeId')
+    const cachedFav = uni.getStorageSync('cachedIsFavorited')
+    if (cached && cached.length > 0) {
+      todayMeals.value = cached
+      recipeId.value = cachedId || ''
+      isFavorited.value = cachedFav || false
+      uni.removeStorageSync('cachedTodayMeals')
+      uni.removeStorageSync('cachedRecipeId')
+      uni.removeStorageSync('cachedIsFavorited')
+      return
+    }
+
+    const now = new Date()
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     const res: any = await new Promise((resolve, reject) => {
       uni.cloud.callFunction({
         name: 'get-today-recipe',
+        data: { dateStr },
         success: (res: any) => resolve(res),
         fail: (err: any) => reject(err)
       })
     })
     if (res.result?.success && res.result?.data) {
       todayMeals.value = res.result.data.meals || []
+      recipeId.value = res.result.data._id || ''
+      isFavorited.value = res.result.data.is_favorite || false
     }
   } catch (err) {
     console.error('获取今日食谱失败:', err)
@@ -222,118 +287,43 @@ const handleGenerate = async () => {
     await loadProfile()
   }
 
-  if (profile.value) {
-    await generateWithProfile()
-  } else {
-    showTrialModal.value = true
-  }
-}
-
-// 构建AI提示词
-const buildPrompt = (ageMonths: number, allergies: string[], tastePreferences: string[]) => {
-  let prompt = `你是一个专业的宝宝辅食营养师。请为${ageMonths}月龄的宝宝生成一日四餐的辅食食谱。`
-
-  if (allergies?.length) {
-    prompt += `\n食谱需避免以下过敏原：${allergies.join('、')}`
-  }
-  if (tastePreferences?.length) {
-    prompt += `\n宝宝口味偏好：${tastePreferences.join('、')}`
-  }
-
-  prompt += `\n重要：只返回纯JSON字符串，不要任何markdown格式、不要代码块、不要注释。格式如下：\n{"meals":[{"type":"早餐","name":"","ingredients":[""],"steps":[""]},{"type":"午餐","name":"","ingredients":[""],"steps":[""]},{"type":"下午茶","name":"","ingredients":[""],"steps":[""]},{"type":"晚餐","name":"","ingredients":[""],"steps":[""]}]}`
-
-  return prompt
-}
-
-// 调用百炼 API
-const callLLMAPI = async (prompt: string) => {
-  console.log('调用百炼 API...')
-  const token = uni.getStorageSync('api_key') || API_KEY
-
-  const res = await new Promise((resolve, reject) => {
-    uni.request({
-      url: `${BASE_URL}/chat/completions`,
-      method: 'POST',
-      header: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      data: {
-        model: 'qwen3.5-35b-a3b',
-        messages: [
-          {
-            role: 'system',
-            content: '你是一个专业的宝宝辅食营养师。你必须始终返回一个合法的JSON对象，不要返回任何JSON之外的文本。'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        response_format: { type: 'json_object' }
-      },
-      success: (res: any) => {
-        console.log('百炼响应:', res)
-        resolve(res)
-      },
-      fail: (err: any) => {
-        console.error('百炼请求失败:', err)
-        reject(err)
+  if (!profile.value) {
+    uni.showModal({
+      title: '提示',
+      content: '请先录入宝宝档案，以便我们为您生成更合适的食谱',
+      confirmText: '去录入',
+      cancelText: '取消',
+      success: (res) => {
+        if (res.confirm) {
+          uni.navigateTo({ url: '/pages/profile/profile?action=add' })
+        }
       }
     })
-  })
-
-  const data = (res as any).data
-  if (data && data.choices && data.choices[0] && data.choices[0].message) {
-    return data.choices[0].message.content
+    return
   }
-  return null
+
+  uni.showLoading({ title: '生成中...', mask: true })
+  isLoading.value = true
+
+  await generateWithProfile()
+  uni.hideLoading()
 }
 
-// 调用AI生成食谱
-const generateWithAI = async (ageMonths: number, allergies: string[], tastePreferences: string[]) => {
-  const prompt = buildPrompt(ageMonths, allergies, tastePreferences)
-
+// 构建提示词
+// 生成食谱内容
+const generateRecipeContent = async (ageMonths: number, allergies: string[], tastePreferences: string[], diversityPrefer: string = 'diverse', city?: string) => {
+  const prompt = buildPrompt(ageMonths, allergies, tastePreferences, diversityPrefer, city)
+  addLog('开始生成食谱...')
   try {
-    console.log('尝试调用百炼 API...')
-    const result = await callLLMAPI(prompt)
+    const result = await callLLMAPI(prompt, addLog)
     if (result) {
-      console.log('百炼 返回:', result)
+      addLog('AI返回内容长度: ' + result.length)
       return result
+    } else {
+      addLog('AI返回为空')
     }
-  } catch (e) {
-    console.log('百炼 调用失败，尝试腾讯混元:', e)
-  }
-
-  if (typeof wx !== 'undefined' && wx.cloud && wx.cloud.extend && wx.cloud.extend.AI) {
-    console.log('使用 wx.cloud.extend.AI (腾讯混元)')
-    const ai = wx.cloud.extend.AI
-    const model = ai.createModel('hunyuan-exp')
-    const res = await model.generateText({
-      model: 'hunyuan-2.0-instruct-20251111',
-      messages: [{ role: 'user', content: prompt }]
-    })
-    console.log('腾讯混元响应:', res)
-    return res.choices?.[0]?.message?.content || ''
-  }
-
-  return null
-}
-
-// 解析AI返回的JSON
-const parseMealsFromResponse = (content: string | null) => {
-  if (!content) return null
-
-  try {
-    const parsed = JSON.parse(content)
-    if (parsed.meals && Array.isArray(parsed.meals)) {
-      return parsed.meals
-    }
-    if (Array.isArray(parsed)) {
-      return parsed
-    }
-  } catch (e) {
-    console.error('解析失败:', e)
+  } catch (e: any) {
+    addLog('生成异常: ' + (e.message || e))
   }
   return null
 }
@@ -342,19 +332,39 @@ const parseMealsFromResponse = (content: string | null) => {
 const generateWithProfile = async () => {
   isLoading.value = true
   try {
-    const content = await generateWithAI(
+    const content = await generateRecipeContent(
       profile.value.ageMonths,
       profile.value.allergies || [],
-      [...(profile.value.tasteLike || []), ...(profile.value.tasteDislike || [])]
+      [...(profile.value.taste_like || []), ...(profile.value.taste_dislike || [])],
+      profile.value.diversity_prefer || 'diverse',
+      profile.value.city
     )
 
-    const meals = parseMealsFromResponse(content)
+    const meals = parseMealsFromResponse(content, addLog)
+
+    if (!meals || meals.length === 0) {
+      uni.showToast({ title: '解析失败: ' + (content ? content.substring(0, 100) : '空'), icon: 'none', duration: 5000 })
+      isLoading.value = false
+      return
+    }
 
     if (meals && meals.length > 0) {
-      await saveRecipe(meals)
+      const ids = await saveRecipe(meals)
+      recipeId.value = ids
       todayMeals.value = meals
+      // 清除缓存，确保下次加载最新数据
+      uni.removeStorageSync('cachedTodayMeals')
+      uni.removeStorageSync('cachedRecipeId')
+      uni.removeStorageSync('cachedIsFavorited')
+      const genParams = {
+        ageMonths: profile.value.ageMonths,
+        allergies: profile.value.allergies || [],
+        tastePreferences: [...(profile.value.taste_like || []), ...(profile.value.taste_dislike || [])],
+        diversityPrefer: profile.value.diversity_prefer || 'diverse',
+        city: profile.value.city
+      }
       uni.navigateTo({
-        url: `/pages/recipe/recipe?data=${encodeURIComponent(JSON.stringify(meals))}`
+        url: `/pages/recipe/recipe?data=${encodeURIComponent(JSON.stringify(meals))}&id=${encodeURIComponent(ids)}&genParams=${encodeURIComponent(JSON.stringify(genParams))}`
       })
     } else {
       uni.showToast({ title: '生成失败，请重试', icon: 'none' })
@@ -367,23 +377,28 @@ const generateWithProfile = async () => {
   }
 }
 
-// 保存食谱
+// 保存食谱，返回recipe ID
 const saveRecipe = async (meals: any[]) => {
   try {
+    // 使用本地日期字符串（格式：2026-04-22）
+    const now = new Date()
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     const res: any = await new Promise((resolve, reject) => {
       ;(uni as any).cloud.callFunction({
         name: 'save-recipe',
-        data: { meals },
+        data: { meals, dateStr },
         success: (r: any) => resolve(r),
         fail: (err: any) => reject(err)
       })
     })
     if (res.result?.success) {
       console.log('食谱已保存:', res.result.id)
+      return res.result.id || ''
     }
   } catch (err) {
     console.error('保存食谱失败:', err)
   }
+  return ''
 }
 
 // 确认试用模式
@@ -395,17 +410,29 @@ const confirmTrial = async () => {
   }
 
   showTrialModal.value = false
+  uni.showLoading({ title: '生成中...', mask: true })
   isLoading.value = true
 
   try {
-    const content = await generateWithAI(age, [], [])
-    const meals = parseMealsFromResponse(content)
+    const content = await generateRecipeContent(age, [], [])
+    const meals = parseMealsFromResponse(content, addLog)
+
+    if (!meals || meals.length === 0) {
+      uni.showToast({ title: '解析失败: ' + (content ? content.substring(0, 100) : '空'), icon: 'none', duration: 5000 })
+      isLoading.value = false
+      return
+    }
 
     if (meals && meals.length > 0) {
-      await saveRecipe(meals)
+      const id = await saveRecipe(meals)
+      recipeId.value = id
       todayMeals.value = meals
+      // 清除缓存
+      uni.removeStorageSync('cachedTodayMeals')
+      uni.removeStorageSync('cachedRecipeId')
+      uni.removeStorageSync('cachedIsFavorited')
       uni.navigateTo({
-        url: `/pages/recipe/recipe?data=${encodeURIComponent(JSON.stringify(meals))}`
+        url: `/pages/recipe/recipe?data=${encodeURIComponent(JSON.stringify(meals))}&id=${encodeURIComponent(id)}`
       })
     } else {
       uni.showToast({ title: '生成失败，请重试', icon: 'none' })
@@ -420,11 +447,18 @@ const confirmTrial = async () => {
 // 查看餐次详情
 const showMealDetail = (index: number) => {
   if (todayMeals.value && todayMeals.value.length > 0) {
-    uni.navigateTo({
-      url: `/pages/recipe/recipe?data=${encodeURIComponent(JSON.stringify(todayMeals.value))}`
-    })
+    const genParams = profile.value ? {
+      ageMonths: profile.value.ageMonths,
+      allergies: profile.value.allergies || [],
+      tastePreferences: [...(profile.value.taste_like || []), ...(profile.value.taste_dislike || [])],
+      diversityPrefer: profile.value.diversity_prefer || 'diverse',
+      city: profile.value.city
+    } : null
+    const url = genParams
+      ? `/pages/recipe/recipe?data=${encodeURIComponent(JSON.stringify(todayMeals.value))}&id=${encodeURIComponent(recipeId.value)}&genParams=${encodeURIComponent(JSON.stringify(genParams))}`
+      : `/pages/recipe/recipe?data=${encodeURIComponent(JSON.stringify(todayMeals.value))}&id=${encodeURIComponent(recipeId.value)}`
+    uni.navigateTo({ url })
   } else {
-    // 模拟数据
     const mockMeals = [
       { type: '早餐', name: '苹果燕麦泥', ingredients: ['苹果 50g', '燕麦 20g'], steps: [], duration: 20 },
       { type: '午餐', name: '三文鱼土豆浓汤', ingredients: ['三文鱼 30g', '土豆 40g', '奶 20ml'], steps: [], duration: 25 },
@@ -437,17 +471,84 @@ const showMealDetail = (index: number) => {
   }
 }
 
+// 跳转食谱详情页
+const goToRecipeDetail = () => {
+  if (todayMeals.value.length === 0) return
+  const genParams = profile.value ? {
+    ageMonths: profile.value.ageMonths,
+    allergies: profile.value.allergies || [],
+    tastePreferences: [...(profile.value.taste_like || []), ...(profile.value.taste_dislike || [])],
+    diversityPrefer: profile.value.diversity_prefer || 'diverse',
+    city: profile.value.city
+  } : null
+  const url = genParams
+    ? `/pages/recipe/recipe?data=${encodeURIComponent(JSON.stringify(todayMeals.value))}&id=${encodeURIComponent(recipeId.value)}&genParams=${encodeURIComponent(JSON.stringify(genParams))}`
+    : `/pages/recipe/recipe?data=${encodeURIComponent(JSON.stringify(todayMeals.value))}&id=${encodeURIComponent(recipeId.value)}`
+  uni.navigateTo({ url })
+}
+
 // 导航
-const goToProfile = () => {
-  uni.navigateTo({ url: '/pages/profile/profile' })
+const goToProfile = async () => {
+  if (!profile.value) {
+    await loadProfile()
+  }
+  if (profile.value?._id) {
+    uni.setStorageSync('currentProfile', profile.value)
+    uni.navigateTo({ url: '/pages/profile/profile?from=list' })
+  } else {
+    uni.navigateTo({ url: '/pages/profile/profile?action=add' })
+  }
 }
 
 const goToHistory = () => {
-  uni.navigateTo({ url: '/pages/history/history' })
+  uni.switchTab({ url: '/pages/history/history' })
 }
 
 const goToFavorites = () => {
   uni.navigateTo({ url: '/pages/favorites/favorites' })
+}
+
+const toggleFavorite = async () => {
+  if (todayMeals.value.length === 0) {
+    uni.showToast({ title: '暂无食谱可收藏', icon: 'none' })
+    return
+  }
+  // 如果没有 recipeId，先保存食谱获取 ID（正常情况应该已有）
+  if (!recipeId.value) {
+    const id = await saveRecipe(todayMeals.value)
+    recipeId.value = id
+  }
+
+  const action = isFavorited.value ? 'remove-favorite' : 'save-favorite'
+  const data = action === 'remove-favorite' ? { id: recipeId.value } : { id: recipeId.value }
+
+  try {
+    await new Promise((resolve, reject) => {
+      (uni as any).cloud.callFunction({
+        name: action,
+        data,
+        success: (r: any) => resolve(r),
+        fail: (err: any) => reject(err)
+      })
+    })
+    isFavorited.value = !isFavorited.value
+    uni.showToast({ title: isFavorited.value ? '已收藏' : '已取消收藏', icon: 'success' })
+  } catch (err) {
+    console.error('收藏操作失败:', err)
+    uni.showToast({ title: '操作失败', icon: 'none' })
+  }
+}
+
+const refreshMeals = async () => {
+  if (todayMeals.value.length === 0) return
+  isLoading.value = true
+  try {
+    await generateWithProfile()
+  } catch (err) {
+    console.error('刷新失败:', err)
+  } finally {
+    isLoading.value = false
+  }
 }
 
 const goToMy = () => {
@@ -470,6 +571,7 @@ onMounted(async () => {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 /* 顶部导航 */
@@ -521,7 +623,9 @@ onMounted(async () => {
 /* 主内容区 */
 .main-content {
   flex: 1;
-  padding: 16rpx 24rpx 120rpx;
+  width: 100%;
+  padding: 16rpx 24rpx 110rpx;
+  box-sizing: border-box;
 }
 
 /* 宝宝信息卡片 */
@@ -535,6 +639,13 @@ onMounted(async () => {
   align-items: center;
   box-shadow: 0 4rpx 20rpx $shadow-light;
   border: 1rpx solid rgba(255, 155, 94, 0.1);
+  transition: all 0.2s ease;
+}
+
+.baby-card:active {
+  opacity: 0.75;
+  transform: scale(0.97);
+  box-shadow: 0 2rpx 12rpx $shadow-light;
 }
 
 .baby-left {
@@ -599,8 +710,8 @@ onMounted(async () => {
   color: #ccc;
 }
 
-/* AI生成按钮 */
-.ai-generate-btn {
+/* 生成按钮 */
+.generate-btn {
   width: 100%;
   background: linear-gradient(135deg, $primary-gradient-start 0%, $primary-gradient-end 100%);
   border-radius: 28rpx;
@@ -618,7 +729,7 @@ onMounted(async () => {
   text-align: left;
 }
 
-.ai-decor {
+.decor {
   position: absolute;
   top: -80rpx;
   right: -80rpx;
@@ -636,7 +747,7 @@ onMounted(async () => {
   opacity: 0.2;
 }
 
-.ai-badge {
+.badge {
   display: flex;
   align-items: center;
   margin-bottom: 16rpx;
@@ -647,20 +758,20 @@ onMounted(async () => {
   margin-right: 8rpx;
 }
 
-.ai-label {
+.label {
   font-size: 20rpx;
   font-weight: 600;
   color: rgba(255, 235, 205, 0.9);
   letter-spacing: 1px;
 }
 
-.ai-title-row {
+.title-row {
   display: flex;
   align-items: center;
   margin-bottom: 8rpx;
 }
 
-.ai-title {
+.title {
   font-size: 44rpx;
   font-weight: 800;
   color: #fff;
@@ -671,7 +782,7 @@ onMounted(async () => {
   margin-left: 12rpx;
 }
 
-.ai-desc {
+.desc {
   font-size: 26rpx;
   color: rgba(255, 255, 255, 0.8);
   font-weight: 500;
@@ -695,6 +806,13 @@ onMounted(async () => {
   overflow: hidden;
   border: none;
   text-align: left;
+  transition: all 0.2s ease;
+}
+
+.history-card:active,
+.fav-card:active {
+  opacity: 0.72;
+  transform: scale(0.96);
 }
 
 .card-decor-blue,
@@ -777,7 +895,7 @@ onMounted(async () => {
   color: $text-primary;
 }
 
-.refresh-btn {
+.action-btn {
   background: #FFF3E0;
   color: $meal-lunch;
   font-size: 22rpx;
@@ -787,6 +905,17 @@ onMounted(async () => {
   border: none;
 }
 
+.action-btn.btn-loading {
+  background: rgba(255, 155, 94, 0.15);
+  color: rgba(255, 107, 107, 0.6);
+}
+
+.header-btns {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
 .meals-card {
   background: $card-bg;
   border-radius: 28rpx;
@@ -794,36 +923,40 @@ onMounted(async () => {
   box-shadow: 0 4rpx 20rpx $shadow-light;
 }
 
-.timeline {
+.timeline-wrap {
   position: relative;
-  padding-left: 40rpx;
+  padding-left: 48rpx;
 }
 
-.timeline::before {
-  content: '';
+.timeline-line {
   position: absolute;
-  left: 16rpx;
-  top: 0;
-  bottom: 0;
-  width: 4rpx;
-  background: rgba(255, 152, 130, 0.3);
-  border-radius: 2rpx;
+  left: 15px;
+  top: 16px;
+  bottom: 16px;
+  width: 2px;
+  background: rgba(255, 152, 130, 0.6);
+  z-index: 0;
+}
+
+.timeline-list {
+  position: relative;
+  z-index: 10;
 }
 
 .timeline-item {
-  position: relative;
-  padding-bottom: 48rpx;
-  padding-left: 64rpx;
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 48rpx;
 }
 
 .timeline-item:last-child {
-  padding-bottom: 0;
+  margin-bottom: 0;
 }
 
 .timeline-dot {
-  position: absolute;
-  left: -64rpx;
-  top: 0;
+  position: relative;
+  z-index: 10;
+  flex-shrink: 0;
   width: 56rpx;
   height: 56rpx;
   border-radius: 50%;
@@ -832,7 +965,8 @@ onMounted(async () => {
   justify-content: center;
   border: 5rpx solid #fff;
   box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.1);
-  z-index: 1;
+  margin-left: -48rpx;
+  margin-right: 24rpx;
 }
 
 .timeline-dot.breakfast { background: #FEF3C7; }
@@ -840,14 +974,10 @@ onMounted(async () => {
 .timeline-dot.snack { background: #FFF1F2; }
 .timeline-dot.dinner { background: #EEF2FF; }
 
-.dot-icon {
-  font-size: 24rpx;
-}
-
 .meal-content {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  padding-top: 12rpx;
 }
 
 .meal-header {
@@ -876,25 +1006,33 @@ onMounted(async () => {
   margin-bottom: 8rpx;
 }
 
-.meal-ingredients {
-  font-size: 20rpx;
-  color: $text-secondary;
+.meal-ingredients-wrap {
+  display: inline-block;
+  align-self: flex-start;
   background: #f9f9f9;
   padding: 6rpx 12rpx;
   border-radius: 8rpx;
   border: 1rpx solid #f0f0f0;
-  display: inline-block;
   margin-bottom: 8rpx;
 }
 
-.recipe-btn {
-  color: $primary-gradient-start;
+.meal-ingredients {
+  font-size: 20rpx;
+  color: $text-secondary;
+  line-height: 1.4;
+}
+
+.recipe-btn-wrap {
+  display: flex;
+  align-items: center;
+  margin-top: 4rpx;
+}
+
+.recipe-btn-text {
+  color: #f97316;
   font-size: 22rpx;
   font-weight: 500;
-  background: none;
-  border: none;
-  padding: 0;
-  text-align: left;
+  margin-right: 4rpx;
 }
 
 /* 试用模式弹窗 */
@@ -965,5 +1103,78 @@ onMounted(async () => {
       color: #fff;
     }
   }
+}
+
+/* 调试日志浮标 */
+.debug-float {
+  position: fixed;
+  right: 24rpx;
+  bottom: 200rpx;
+  width: 80rpx;
+  height: 80rpx;
+  background: #1a1a1a;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.3);
+  z-index: 999;
+}
+
+.debug-btn {
+  font-size: 36rpx;
+}
+
+/* 调试日志面板 */
+.debug-panel {
+  position: fixed;
+  left: 24rpx;
+  right: 120rpx;
+  bottom: 200rpx;
+  height: 500rpx;
+  background: #1a1a1a;
+  border-radius: 20rpx;
+  overflow: hidden;
+  z-index: 998;
+  box-shadow: 0 4rpx 30rpx rgba(0, 0, 0, 0.4);
+}
+
+.debug-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20rpx 24rpx;
+  background: #2a2a2a;
+}
+
+.debug-title {
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
+.debug-close {
+  color: #888;
+  font-size: 28rpx;
+  padding: 8rpx;
+}
+
+.debug-content {
+  padding: 20rpx 24rpx;
+  height: calc(500rpx - 80rpx);
+  background: #111;
+}
+
+.log-line {
+  display: block;
+  color: #0f0;
+  font-size: 22rpx;
+  font-family: monospace;
+  line-height: 1.8;
+  word-break: break-all;
+}
+
+.log-empty {
+  color: #666;
 }
 </style>

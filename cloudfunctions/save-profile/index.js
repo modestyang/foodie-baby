@@ -10,7 +10,7 @@ exports.main = async (event, context) => {
     return { success: false, error: '无法获取用户身份' }
   }
 
-  const { nickname, birthday, gender, city, allergies, _id } = event
+  const { nickname, birthday, gender, city, allergies, taste_like, taste_dislike, diversity_prefer, _id } = event
 
   if (!nickname || !birthday || !gender || !city) {
     return { success: false, error: '缺少必填字段' }
@@ -19,9 +19,22 @@ exports.main = async (event, context) => {
   try {
     const db = cloud.database()
 
-    // 如果有 _id，先删除旧档案
+    // 如果有 _id，更新现有档案
     if (_id) {
-      await db.collection('profiles').doc(_id).remove()
+      await db.collection('profiles').doc(_id).update({
+        data: {
+          nickname,
+          birthday,
+          gender: gender === '男' ? 'male' : 'female',
+          city,
+          allergies: allergies || [],
+          taste_like: taste_like || [],
+          taste_dislike: taste_dislike || [],
+          diversity_prefer: diversity_prefer || 'diverse',
+          updated_at: new Date()
+        }
+      })
+      return { success: true, id: _id }
     }
 
     // 取消其他默认档案
@@ -41,6 +54,9 @@ exports.main = async (event, context) => {
         gender: gender === '男' ? 'male' : 'female',
         city,
         allergies: allergies || [],
+        taste_like: taste_like || [],
+        taste_dislike: taste_dislike || [],
+        diversity_prefer: diversity_prefer || 'diverse',
         isDefault: true,
         created_at: new Date()
       }

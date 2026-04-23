@@ -1,6 +1,13 @@
 {
   "pages": [
     {
+      "path": "pages/intro/intro",
+      "style": {
+        "navigationBarTitleText": "",
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/index/index",
       "style": {
         "navigationBarTitleText": "首页",
@@ -64,6 +71,7 @@
     "backgroundColor": "#f8f8f8"
   },
   "tabBar": {
+    "custom": true,
     "color": "#999999",
     "selectedColor": "#333333",
     "backgroundColor": "#ffffff",

@@ -1,5 +1,1 @@
-{
-  "permissions": {
-    "desc": "获取今日食谱云函数配置"
-  }
-}
+{"permissions":{"openapi":[]}}

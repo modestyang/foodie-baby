@@ -6,24 +6,22 @@ exports.main = async (event, context) => {
   const wxContext = cloud.getWXContext()
   const openid = wxContext.OPENID
 
-  console.log('get-history called, openid:', openid)
+  if (!openid) {
+    return { success: false, error: '无法获取用户身份' }
+  }
 
-  const { page = 1, pageSize = 20 } = event
+  const { page = 1, pageSize = 50 } = event
 
   try {
     const db = cloud.database()
     const offset = (Number(page) - 1) * Number(pageSize)
 
-    console.log('querying recipes for openid:', openid)
-
     const res = await db.collection('recipes')
-      .where({ _openid: openid })
-      .orderBy('created_at', 'desc')
+      .where({ _openid: openid, is_favorite: true })
+      .orderBy('favorited_at', 'desc')
       .skip(offset)
       .limit(Number(pageSize))
       .get()
-
-    console.log('query result, count:', res.data?.length || 0)
 
     return {
       success: true,
@@ -31,7 +29,7 @@ exports.main = async (event, context) => {
       total: res.total || 0
     }
   } catch (err) {
-    console.error('get-history error:', err)
+    console.error('get-favorites error:', err)
     return { success: false, error: err.message || '查询失败', list: [] }
   }
 }
