@@ -2,9 +2,18 @@
 const MODEL = 'qwen3.5-plus-2026-04-20'
 
 type LogFunc = (msg: string) => void
+type ThinkFunc = (content: string) => void
+
+interface StreamResult {
+  content: string
+  thinking: string
+}
 
 // 调用微信云开发 AI 模型
-export const callLLMAPI = async (prompt: string, log?: LogFunc): Promise<string | null> => {
+export const callLLMAPI = async (
+  prompt: string,
+  log?: LogFunc
+): Promise<string | null> => {
   log?.('调用微信云AI...')
 
   try {
@@ -32,17 +41,29 @@ export const callLLMAPI = async (prompt: string, log?: LogFunc): Promise<string 
     })
 
     log?.('streamText res: ' + JSON.stringify(res))
+    log?.('res.textStream type: ' + typeof res.textStream + ', isPromise: ' + (res.textStream && typeof res.textStream.then === 'function'))
+    log?.('res.eventStream type: ' + typeof res.eventStream + ', isPromise: ' + (res.eventStream && typeof res.eventStream.then === 'function'))
 
     // 使用 textStream 获取完整内容
     let content = ''
     if (res.textStream) {
-      const textStream = res.textStream
-      while (true) {
-        const { value, done } = await textStream.next()
-        if (done) break
-        if (value) {
-          content += value
+      log?.('发现 textStream，开始读取内容...')
+      try {
+        const textStream = res.textStream
+        let count = 0
+        while (true) {
+          const result = await textStream.next()
+          log?.('textStream next result: ' + JSON.stringify(result))
+          if (result.done) break
+          if (result.value) {
+            content += result.value
+            count++
+            if (count <= 3) log?.('textStream value: ' + result.value)
+          }
         }
+        log?.('textStream 共返回 ' + count + ' 段内容')
+      } catch (e) {
+        log?.('textStream 读取异常: ' + (e as Error).message)
       }
     }
 

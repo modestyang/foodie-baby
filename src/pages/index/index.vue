@@ -36,7 +36,6 @@
         <text class="desc">根据小团子营养需求，智能规划四餐</text>
       </button>
 
-      
       <!-- 3. 历史与收藏 -->
       <view class="grid-2">
         <button class="history-card" @click="goToHistory">
@@ -135,7 +134,8 @@
         <text v-for="(log, idx) in debugLogs" :key="idx" class="log-line">{{ log }}</text>
       </scroll-view>
     </view>
-  </view>
+
+      </view>
 </template>
 
 <script setup lang="ts">
@@ -309,7 +309,6 @@ const handleGenerate = async () => {
   uni.hideLoading()
 }
 
-// 构建提示词
 // 生成食谱内容
 const generateRecipeContent = async (ageMonths: number, allergies: string[], tastePreferences: string[], diversityPrefer: string = 'diverse', city?: string) => {
   const prompt = buildPrompt(ageMonths, allergies, tastePreferences, diversityPrefer, city)
@@ -1176,5 +1175,62 @@ onMounted(async () => {
 
 .log-empty {
   color: #666;
+}
+
+/* AI 思考浮层 */
+.thinking-overlay {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 999;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: calc(200rpx + env(safe-area-inset-bottom));
+}
+
+.thinking-card {
+  background: #ffffff;
+  border-radius: 24rpx 24rpx 0 0;
+  padding: 32rpx;
+  width: 100%;
+  max-height: 40vh;
+  box-shadow: 0 -8rpx 40rpx rgba(0, 0, 0, 0.15);
+}
+
+.thinking-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.thinking-icon {
+  font-size: 36rpx;
+  margin-right: 16rpx;
+}
+
+.thinking-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.thinking-content {
+  background: #f8f8f8;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  max-height: 30vh;
+}
+
+.thinking-text {
+  font-size: 24rpx;
+  color: #444;
+  line-height: 1.8;
+  word-break: break-all;
+  white-space: pre-wrap;
+  display: block;
 }
 </style>
